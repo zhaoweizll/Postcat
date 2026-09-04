@@ -1,0 +1,67 @@
+# ========== 依赖 ==========
+node_modules/
+src-tauri/target/
+target/
+
+# ========== 构建输出 ==========
+dist/
+dist-portable/
+AppDir/
+build/
+
+# ========== 锁文件 ==========
+Cargo.lock
+src-tauri/Cargo.lock
+
+# ========== 环境变量 / 敏感配置 ==========
+.env
+.env.local
+.env.*.local
+.npmrc
+
+# ========== IDE / 编辑器 ==========
+.vscode/
+.idea/
+.trae/
+.opencode/
+*.swp
+*.swo
+
+# ========== 操作系统 ==========
+.DS_Store
+Thumbs.db
+
+# ========== 日志 ==========
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========== 测试覆盖率 ==========
+coverage/
+.nyc_output/
+
+# ========== 打包产物（可执行文件、安装包） ==========
+*.tar.gz
+*.AppImage
+*.dmg
+*.deb
+*.rpm
+*.msi
+*.exe
+easypost-*/
+
+# ========== 其他杂项 ==========
+*.rtf
+test
+
+# ========== 构建脚本和 Dockerfile（你要求忽略） ==========
+build-*.sh
+Dockerfile.*
+.dockerignore
+
+# ========== 临时/工具目录 ==========
+.specify/
+
+# ========== Core dump 文件 ==========
+src-tauri/core
