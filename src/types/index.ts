@@ -38,6 +38,11 @@ export interface Collection {
   requests: RequestItem[]
 }
 
+export interface RequestContext {
+  collection?: Collection
+  request?: RequestItem
+}
+
 export interface HistoryItem {
   id: string
   timestamp: number

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { Send, Plus, Trash2, RotateCcw } from 'lucide-vue-next'
+import RequestTitleBar from '@/components/RequestTitleBar.vue'
 
 const store = useAppStore()
 
@@ -38,6 +39,7 @@ function removeParam(key: string) {
 
 <template>
   <div class="h-full flex flex-col bg-[#151a28]">
+    <RequestTitleBar />
     <div class="flex items-center gap-3 px-4 py-3 border-b border-[#2d3548] flex-shrink-0">
       <select 
         v-model="store.currentMethod"

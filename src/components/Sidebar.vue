@@ -420,7 +420,7 @@ onBeforeUnmount(() => {
                 v-for="req in col.requests"
                 :key="req.id"
                 class="flex items-center gap-2 px-2 py-1 text-xs text-gray-500 hover:bg-[#252a3a] rounded cursor-pointer group"
-                @click="store.loadRequest(req)"
+                @click="store.loadRequest(req, col.id)"
               >
                 <Play class="w-3 h-3" />
                 <span class="flex-1 truncate">{{ req.name }}</span>

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import type { RequestConfig, ResponseData, Environment, Collection, HistoryItem, HttpMethod, BodyType, RawType, RequestItem } from '@/types'
+import type { RequestConfig, ResponseData, Environment, Collection, HistoryItem, HttpMethod, BodyType, RawType, RequestItem, RequestContext } from '@/types'
 import { sendRequest as apiSendRequest, getEnvironments, saveEnvironment, deleteEnvironment, getCollections, saveCollection, deleteCollection, getHistory, saveHistory, clearHistory, generateId, importPostmanCollection, exportCollectionToJson } from '@/api/tauri'
 
 export const useAppStore = defineStore('app', () => {
@@ -21,6 +21,9 @@ export const useAppStore = defineStore('app', () => {
   const collections = ref<Collection[]>([])
   const history = ref<HistoryItem[]>([])
 
+  const currentCollectionId = ref<string | null>(null)
+  const currentRequestId = ref<string | null>(null)
+
   watch(currentEnvironmentId, (newId) => {
     if (newId) {
       localStorage.setItem('currentEnvironmentId', newId)
@@ -35,6 +38,14 @@ export const useAppStore = defineStore('app', () => {
 
   const currentEnvironment = computed(() => {
     return environments.value.find(e => e.id === currentEnvironmentId.value)
+  })
+
+  const currentRequestContext = computed<RequestContext>(() => {
+    if (!currentCollectionId.value) return {}
+    const collection = collections.value.find(c => c.id === currentCollectionId.value)
+    if (!collection) return {}
+    const request = collection.requests.find(r => r.id === currentRequestId.value)
+    return { collection, request }
   })
 
   function replaceVars(str: string): string {
@@ -139,6 +150,10 @@ export const useAppStore = defineStore('app', () => {
       await saveCollection(col)
       await loadCollections()
     }
+    if (currentCollectionId.value === collectionId && currentRequestId.value === requestId) {
+      currentCollectionId.value = null
+      currentRequestId.value = null
+    }
   }
 
   async function updateRequestInCollection(collectionId: string, requestId: string, updates: Partial<Omit<RequestItem, 'id'>>) {
@@ -190,7 +205,9 @@ export const useAppStore = defineStore('app', () => {
     history.value = []
   }
 
-  function loadRequest(item: RequestItem) {
+  function loadRequest(item: RequestItem, collectionId?: string) {
+    currentCollectionId.value = collectionId ?? null
+    currentRequestId.value = item.id
     currentMethod.value = item.method as HttpMethod
     currentUrl.value = item.url
     currentHeaders.value = { ...item.headers }
@@ -202,6 +219,8 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function resetRequest() {
+    currentCollectionId.value = null
+    currentRequestId.value = null
     currentMethod.value = 'GET'
     currentUrl.value = ''
     currentHeaders.value = {}
@@ -242,6 +261,9 @@ export const useAppStore = defineStore('app', () => {
     currentEnvironment,
     collections,
     history,
+    currentCollectionId,
+    currentRequestId,
+    currentRequestContext,
     response,
     isLoading,
     error,
