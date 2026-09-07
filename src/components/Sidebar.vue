@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useAppStore } from '@/stores/app'
 import {
   ChevronRight, ChevronDown, Folder, Clock, Globe,
   Plus, Trash2, Play, Save, Settings, Upload, Download,
-  MoreVertical, Pencil
+  MoreVertical, Pencil, Search, X
 } from 'lucide-vue-next'
 
 const store = useAppStore()
@@ -29,6 +29,57 @@ const editingRequestName = ref('')
 const editingVarIndex = ref<number | null>(null)
 const editingVarKey = ref('')
 const editingVarValue = ref('')
+
+const isSearchOpen = ref(false)
+const searchQuery = ref('')
+const searchInputRef = ref<HTMLInputElement | null>(null)
+
+const hasAnyRequests = computed(() => store.collections.some((collection) => collection.requests.length > 0))
+
+const filteredCollections = computed(() => {
+  const q = searchQuery.value.trim().slice(0, 100).toLowerCase()
+  if (!q) {
+    return store.collections.map((collection) => ({ collection, requests: collection.requests }))
+  }
+  const result: {
+    collection: (typeof store.collections)[number]
+    requests: (typeof store.collections)[number]['requests']
+  }[] = []
+  for (const collection of store.collections) {
+    const requests = collection.requests.filter((request) =>
+      request.name.toLowerCase().includes(q) || request.url.toLowerCase().includes(q)
+    )
+    if (requests.length > 0) {
+      result.push({ collection, requests })
+    }
+  }
+  return result
+})
+
+watch(isSearchOpen, async (open) => {
+  if (open) {
+    await nextTick()
+    searchInputRef.value?.focus()
+  }
+})
+
+function toggleSearch() {
+  if (isSearchOpen.value) {
+    isSearchOpen.value = false
+    searchQuery.value = ''
+  } else {
+    isSearchOpen.value = true
+  }
+}
+
+function closeSearch() {
+  isSearchOpen.value = false
+  searchQuery.value = ''
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+}
 
 function toggleSection(section: 'environments' | 'collections' | 'history') {
   expandedSections.value[section] = !expandedSections.value[section]
@@ -366,6 +417,14 @@ onBeforeUnmount(() => {
           <span class="text-sm">集合</span>
           <div class="ml-auto flex items-center gap-1">
             <button 
+              v-if="hasAnyRequests"
+              class="p-1 hover:bg-purple-500 rounded"
+              @click.stop="toggleSearch"
+              :title="isSearchOpen ? '关闭搜索' : '搜索请求'"
+            >
+              <Search class="w-4 h-4 text-purple-400" />
+            </button>
+            <button 
               class="p-1 hover:bg-green-500 rounded"
               @click.stop="triggerImport"
               title="导入 Postman 集合"
@@ -390,37 +449,56 @@ onBeforeUnmount(() => {
           @change="handleImportFile"
         />
         
+        <div v-if="isSearchOpen" class="ml-2 mt-2 flex items-center gap-2 bg-[#252a3a] border border-[#2d3548] rounded px-2 py-1">
+          <Search class="w-3 h-3 text-gray-400 shrink-0" />
+          <input
+            ref="searchInputRef"
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索接口名或 URL"
+            class="flex-1 bg-transparent text-xs text-white placeholder-gray-500 focus:outline-none"
+            @keyup.esc="closeSearch"
+          />
+          <button
+            class="p-0.5 hover:bg-gray-500 rounded shrink-0"
+            @click="clearSearch"
+            title="清空"
+          >
+            <X class="w-3 h-3 text-gray-400" />
+          </button>
+        </div>
+        
         <div v-if="expandedSections.collections" class="ml-4 space-y-1">
           <div 
-            v-for="col in store.collections" 
-            :key="col.id"
+            v-for="item in filteredCollections" 
+            :key="item.collection.id"
             class="border-l-2 border-transparent hover:border-blue-500"
           >
             <div class="flex items-center gap-2 px-2 py-1.5 text-gray-400 hover:bg-[#252a3a] rounded cursor-pointer">
               <Folder class="w-4 h-4" />
-              <span class="text-sm flex-1 truncate">{{ col.name }}</span>
+              <span class="text-sm flex-1 truncate">{{ item.collection.name }}</span>
               <button 
                 class="p-1 hover:bg-blue-500 rounded"
-                @click.stop="exportCollection(col)"
+                @click.stop="exportCollection(item.collection)"
                 title="导出 JSON"
               >
                 <Download class="w-3 h-3 text-blue-400" />
               </button>
               <button 
                 class="p-1 hover:bg-red-500 rounded"
-                @click.stop="store.removeCollection(col.id)"
+                @click.stop="store.removeCollection(item.collection.id)"
                 title="删除集合"
               >
                 <Trash2 class="w-3 h-3" />
               </button>
             </div>
             
-            <div v-if="col.requests.length" class="ml-6 space-y-0.5">
+            <div v-if="item.requests.length" class="ml-6 space-y-0.5">
               <div
-                v-for="req in col.requests"
+                v-for="req in item.requests"
                 :key="req.id"
                 class="flex items-center gap-2 px-2 py-1 text-xs text-gray-500 hover:bg-[#252a3a] rounded cursor-pointer group"
-                @click="store.loadRequest(req, col.id)"
+                @click="store.loadRequest(req, item.collection.id)"
               >
                 <Play class="w-3 h-3" />
                 <span class="flex-1 truncate">{{ req.name }}</span>
@@ -428,8 +506,8 @@ onBeforeUnmount(() => {
                 <div class="relative">
                   <button
                     class="req-menu-trigger opacity-0 group-hover:opacity-100 p-0.5 hover:bg-[#2d3548] rounded transition-opacity"
-                    :class="{ '!opacity-100': isMenuOpen(col.id, req.id) }"
-                    @click.stop="toggleReqMenu(col.id, req.id, $event)"
+                    :class="{ '!opacity-100': isMenuOpen(item.collection.id, req.id) }"
+                    @click.stop="toggleReqMenu(item.collection.id, req.id, $event)"
                     title="更多操作"
                   >
                     <MoreVertical class="w-3 h-3" />
@@ -439,12 +517,17 @@ onBeforeUnmount(() => {
             </div>
             
             <button 
+              v-if="!isSearchOpen"
               class="ml-6 w-full flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-blue-400 hover:bg-[#252a3a] rounded cursor-pointer"
-              @click="openSaveModal(col.id)"
+              @click="openSaveModal(item.collection.id)"
             >
               <Plus class="w-3 h-3" />
               添加请求
             </button>
+          </div>
+          
+          <div v-if="isSearchOpen && searchQuery.trim() && !filteredCollections.length" class="px-2 py-4 text-xs text-gray-600 text-center">
+            未找到匹配的请求
           </div>
         </div>
       </div>
