@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useAppStore } from '@/stores/app'
+import { useTabsStore } from '@/stores/tabs'
 import {
   ChevronRight, ChevronDown, Folder, Clock, Globe,
   Plus, Trash2, Play, Save, Settings, Upload, Download,
@@ -8,6 +9,7 @@ import {
 } from 'lucide-vue-next'
 
 const store = useAppStore()
+const tabsStore = useTabsStore()
 
 const expandedSections = ref({
   environments: true,
@@ -183,15 +185,16 @@ function openSaveModal(collectionId: string) {
 }
 
 function saveCurrentRequest() {
-  if (savingToCollectionId.value && saveRequestName.value.trim()) {
+  const tab = tabsStore.activeTab
+  if (savingToCollectionId.value && saveRequestName.value.trim() && tab) {
     store.addRequestToCollection(savingToCollectionId.value, {
       name: saveRequestName.value.trim(),
-      method: store.currentMethod,
-      url: store.currentUrl,
-      headers: store.currentHeaders,
-      body: store.currentBody || null,
-      queryParams: store.currentQueryParams,
-      bodyType: store.currentBodyType
+      method: tab.method,
+      url: tab.url,
+      headers: { ...tab.headers },
+      body: tab.body || null,
+      queryParams: { ...tab.queryParams },
+      bodyType: tab.bodyType
     })
     savingToCollectionId.value = null
     saveRequestName.value = ''
@@ -216,13 +219,15 @@ function saveRequestEdit() {
 }
 
 async function updateRequestContent(collectionId: string, requestId: string) {
+  const tab = tabsStore.activeTab
+  if (!tab) return
   await store.updateRequestInCollection(collectionId, requestId, {
-    method: store.currentMethod,
-    url: store.currentUrl,
-    headers: { ...store.currentHeaders },
-    body: store.currentBody || null,
-    queryParams: { ...store.currentQueryParams },
-    bodyType: store.currentBodyType
+    method: tab.method,
+    url: tab.url,
+    headers: { ...tab.headers },
+    body: tab.body || null,
+    queryParams: { ...tab.queryParams },
+    bodyType: tab.bodyType
   })
 }
 
@@ -321,6 +326,10 @@ function menuRenameRequest(collectionId: string, requestId: string, name: string
 function menuDeleteRequest(collectionId: string, requestId: string) {
   closeReqMenu()
   store.removeRequestFromCollection(collectionId, requestId)
+  const tab = tabsStore.tabs.find(t => t.requestId === requestId)
+  if (tab) {
+    tabsStore.closeTab(tab.id)
+  }
 }
 
 function onDocClickClose(e: MouseEvent) {
@@ -498,7 +507,7 @@ onBeforeUnmount(() => {
                 v-for="req in item.requests"
                 :key="req.id"
                 class="flex items-center gap-2 px-2 py-1 text-xs text-gray-500 hover:bg-[#252a3a] rounded cursor-pointer group"
-                @click="store.loadRequest(req, item.collection.id)"
+                @click="tabsStore.openTab(req, item.collection.id)"
               >
                 <Play class="w-3 h-3" />
                 <span class="flex-1 truncate">{{ req.name }}</span>
@@ -557,7 +566,7 @@ onBeforeUnmount(() => {
             v-for="item in store.history" 
             :key="item.id"
             class="flex items-center gap-2 px-2 py-1.5 text-xs text-gray-500 hover:bg-[#252a3a] rounded cursor-pointer"
-            @click="store.loadRequest({ id: item.id, name: item.url, method: item.method, url: item.url, headers: {}, body: null, queryParams: {}, bodyType: null })"
+            @click="tabsStore.openTab({ id: item.id, name: item.url, method: item.method, url: item.url, headers: {}, body: null, queryParams: {}, bodyType: null })"
           >
             <span :class="['px-1.5 py-0.5 rounded text-[10px] font-bold text-white', getMethodColor(item.method)]">
               {{ item.method }}

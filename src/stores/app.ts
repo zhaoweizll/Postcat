@@ -2,27 +2,17 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { RequestConfig, ResponseData, Environment, Collection, HistoryItem, HttpMethod, BodyType, RawType, RequestItem, RequestContext } from '@/types'
 import { sendRequest as apiSendRequest, getEnvironments, saveEnvironment, deleteEnvironment, getCollections, saveCollection, deleteCollection, getHistory, saveHistory, clearHistory, generateId, importPostmanCollection, exportCollectionToJson } from '@/api/tauri'
+import { useTabsStore } from '@/stores/tabs'
 
 export const useAppStore = defineStore('app', () => {
   const httpMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
   const bodyTypes: BodyType[] = ['raw', 'form-data', 'urlencoded']
   const rawTypes: RawType[] = ['JSON', 'XML', 'HTML', 'Text']
 
-  const currentMethod = ref<HttpMethod>('GET')
-  const currentUrl = ref('')
-  const currentHeaders = ref<Record<string, string>>({})
-  const currentBody = ref('')
-  const currentBodyType = ref<BodyType>('raw')
-  const currentRawType = ref<RawType>('JSON')
-  const currentQueryParams = ref<Record<string, string>>({})
-
   const environments = ref<Environment[]>([])
   const currentEnvironmentId = ref<string | null>(null)
   const collections = ref<Collection[]>([])
   const history = ref<HistoryItem[]>([])
-
-  const currentCollectionId = ref<string | null>(null)
-  const currentRequestId = ref<string | null>(null)
 
   watch(currentEnvironmentId, (newId) => {
     if (newId) {
@@ -41,10 +31,15 @@ export const useAppStore = defineStore('app', () => {
   })
 
   const currentRequestContext = computed<RequestContext>(() => {
-    if (!currentCollectionId.value) return {}
-    const collection = collections.value.find(c => c.id === currentCollectionId.value)
-    if (!collection) return {}
-    const request = collection.requests.find(r => r.id === currentRequestId.value)
+    const tabsStore = useTabsStore()
+    const tab = tabsStore.activeTab
+    if (!tab) return {}
+    const collection = tab.collectionId
+      ? collections.value.find(c => c.id === tab.collectionId)
+      : undefined
+    const request = collection
+      ? collection.requests.find(r => r.id === tab.requestId)
+      : undefined
     return { collection, request }
   })
 
@@ -66,13 +61,25 @@ export const useAppStore = defineStore('app', () => {
     return result
   }
 
-  const resolvedUrl = computed(() => replaceVars(currentUrl.value))
+  const resolvedUrl = computed(() => {
+    const tabsStore = useTabsStore()
+    return replaceVars(tabsStore.activeTab?.url ?? '')
+  })
 
-  const resolvedHeaders = computed(() => replaceVarsInRecord(currentHeaders.value))
+  const resolvedHeaders = computed(() => {
+    const tabsStore = useTabsStore()
+    return replaceVarsInRecord(tabsStore.activeTab?.headers ?? {})
+  })
 
-  const resolvedBody = computed(() => replaceVars(currentBody.value))
+  const resolvedBody = computed(() => {
+    const tabsStore = useTabsStore()
+    return replaceVars(tabsStore.activeTab?.body ?? '')
+  })
 
-  const resolvedQueryParams = computed(() => replaceVarsInRecord(currentQueryParams.value))
+  const resolvedQueryParams = computed(() => {
+    const tabsStore = useTabsStore()
+    return replaceVarsInRecord(tabsStore.activeTab?.queryParams ?? {})
+  })
 
   async function loadEnvironments() {
     environments.value = await getEnvironments()
@@ -150,10 +157,6 @@ export const useAppStore = defineStore('app', () => {
       await saveCollection(col)
       await loadCollections()
     }
-    if (currentCollectionId.value === collectionId && currentRequestId.value === requestId) {
-      currentCollectionId.value = null
-      currentRequestId.value = null
-    }
   }
 
   async function updateRequestInCollection(collectionId: string, requestId: string, updates: Partial<Omit<RequestItem, 'id'>>) {
@@ -169,11 +172,15 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function sendRequest() {
+    const tabsStore = useTabsStore()
+    const tab = tabsStore.activeTab
+    if (!tab) return
+
     isLoading.value = true
     error.value = null
 
     const config: RequestConfig = {
-      method: currentMethod.value,
+      method: tab.method,
       url: resolvedUrl.value,
       headers: resolvedHeaders.value,
       body: resolvedBody.value || null,
@@ -186,7 +193,7 @@ export const useAppStore = defineStore('app', () => {
       const historyItem: HistoryItem = {
         id: await generateId(),
         timestamp: Date.now(),
-        method: currentMethod.value,
+        method: tab.method,
         url: config.url,
         status: response.value.status,
         responseTime: response.value.responseTime
@@ -203,33 +210,6 @@ export const useAppStore = defineStore('app', () => {
   async function clearHistoryData() {
     await clearHistory()
     history.value = []
-  }
-
-  function loadRequest(item: RequestItem, collectionId?: string) {
-    currentCollectionId.value = collectionId ?? null
-    currentRequestId.value = item.id
-    currentMethod.value = item.method as HttpMethod
-    currentUrl.value = item.url
-    currentHeaders.value = { ...item.headers }
-    currentBody.value = item.body || ''
-    currentQueryParams.value = { ...item.queryParams }
-    if (item.bodyType) {
-      currentBodyType.value = item.bodyType as BodyType
-    }
-  }
-
-  function resetRequest() {
-    currentCollectionId.value = null
-    currentRequestId.value = null
-    currentMethod.value = 'GET'
-    currentUrl.value = ''
-    currentHeaders.value = {}
-    currentBody.value = ''
-    currentBodyType.value = 'raw'
-    currentRawType.value = 'JSON'
-    currentQueryParams.value = {}
-    response.value = null
-    error.value = null
   }
 
   async function importPostmanCollectionFromJson(jsonStr: string) {
@@ -249,20 +229,11 @@ export const useAppStore = defineStore('app', () => {
     httpMethods,
     bodyTypes,
     rawTypes,
-    currentMethod,
-    currentUrl,
-    currentHeaders,
-    currentBody,
-    currentBodyType,
-    currentRawType,
-    currentQueryParams,
     environments,
     currentEnvironmentId,
     currentEnvironment,
     collections,
     history,
-    currentCollectionId,
-    currentRequestId,
     currentRequestContext,
     response,
     isLoading,
@@ -285,8 +256,6 @@ export const useAppStore = defineStore('app', () => {
     updateRequestInCollection,
     sendRequest,
     clearHistoryData,
-    loadRequest,
-    resetRequest,
     importPostmanCollectionFromJson,
     exportCollectionToJsonFile
   }

@@ -57,3 +57,21 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 
 export type BodyType = 'raw' | 'form-data' | 'urlencoded'
 
 export type RawType = 'JSON' | 'XML' | 'HTML' | 'Text'
+
+export interface Tab {
+  id: string
+  requestId: string | null
+  collectionId: string | null
+  title: string
+  method: HttpMethod
+  url: string
+  headers: Record<string, string>
+  queryParams: Record<string, string>
+  body: string
+  bodyType: BodyType
+  rawType: RawType
+  isDirty: boolean
+}
+
+export type TabField = keyof Tab
+export type TabId = string
